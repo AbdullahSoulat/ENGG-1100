@@ -55,6 +55,9 @@ int armServoPin = 3;
 int servoAngle;
 bool openClaw = false;
 
+unsigned long previousClockTime;
+float millisCounter;
+
 String BluetoothInput;
 float x, y, radius;
 float cos20radius;
@@ -85,8 +88,8 @@ void TurnRight() {
 }
 
 void moveServo(int angle, int pinNumber) {
-  angle = constrain(angle, 0, 180);
 
+  angle = constrain(angle, 0, 180);
   int pulseWidth = map(angle, 0, 180, 500, 2400);
 
   // Send the PWM signal
@@ -94,20 +97,17 @@ void moveServo(int angle, int pinNumber) {
   delayMicroseconds(pulseWidth);  
   digitalWrite(pinNumber, LOW);
 
-  delay(20 - pulseWidth / 1000);
+  previousClockTime = millis();
+  millisCounter = (20 - pulseWidth / 1000) / 1.024;
+
+  // delay(20 - pulseWidth / 1000);
 }
 
 void CloseClaw() {
-  // for (int i=0; i<10; i++) {
-  //   moveServo(0, clawServoPin);
-  // }
   openClaw = false;
 }
 
 void OpenClaw() {
-  // for (int i=0; i<10; i++) {
-  //   moveServo(135, clawServoPin);
-  // }
   openClaw = true;
 }
 
@@ -120,13 +120,24 @@ void OpenClaw() {
 
 void setup() {
   pinMode(3, OUTPUT);
+  pinMode(11, OUTPUT);
+
   Serial.begin(9600);
 }
 
 
 void loop() {
-  if (Serial.available()) {
 
+  if (millis() - previousClockTime >= millisCounter) {
+    moveServo(servoAngle, armServoPin);
+    if (openClaw) {
+      moveServo(135, clawServoPin);
+    } else {
+      moveServo(0, clawServoPin);
+    }
+  }
+
+  if (Serial.available() > 0) {
     BluetoothInput = Serial.readStringUntil('$');
 
     if (BluetoothInput == "R") {
@@ -137,16 +148,26 @@ void loop() {
       OpenClaw();
     } else if (BluetoothInput == "C") {
       CloseClaw();
-    } else {
+    } else if (BluetoothInput == "T") {
+      // top position
+      servoAngle = 0;
+    } else if (BluetoothInput == "M") {
+      // middle position
+      servoAngle = 45;
+    } else if (BluetoothInput == "B") {
+      // low position
+      servoAngle = 90;
+    }
+    else {
       //convert input x,y into float number and get radius, cos(20)radius
       CommaIndex = BluetoothInput.indexOf(",");
       Serial.println(CommaIndex);
 
-      if (CommaIndex != -1) {
+      // if (CommaIndex != -1) {
         angle = BluetoothInput.substring(0, CommaIndex).toFloat();
         radius = BluetoothInput.substring(CommaIndex + 1).toFloat();
 
-        radius = map(radius, 0, 150, 0, 255);
+        // radius = map(radius, 0, 150, 0, 255);
         // radius = radius >= 255 ? 255 : radius;
 
         angle = (angle) * (PI / 180);
@@ -185,18 +206,6 @@ void loop() {
               motor4.move(cos20 * radius);
             }
         } 
-      } else {
-        // controlling the arm servo
-        servoAngle = BluetoothInput.toFloat();
-        // MoveArmServo(BluetoothInput.toFloat());
-      }
     } // end of main swtich statements
-  }
-
-  moveServo(servoAngle, armServoPin);
-  if (openClaw) {
-    moveServo(135, clawServoPin);
-  } else {
-    moveServo(0, clawServoPin);
-  }
+  } 
 }
